@@ -50,6 +50,12 @@ VIRTUAL_HEIGHT = 243
 -- paddle movement speed
 PADDLE_SPEED = 200
 
+-- AI Movement speeds
+AI_SPEED = 200
+AI_EASY = 0.5
+AI_HARD = 2
+AI_CRAZY = 5
+
 --[[
     Called just once at the beginning of the game; used to set up
     game objects, variables, etc. and prepare the game world.
@@ -109,11 +115,12 @@ function love.load()
     winningPlayer = 0
 
     -- the state of our game; can be any of the following:
+    -- 0. 'difficulty' (Sets the difficulty)
     -- 1. 'start' (the beginning of the game, before first serve)
     -- 2. 'serve' (waiting on a key press to serve the ball)
     -- 3. 'play' (the ball is in play, bouncing between paddles)
     -- 4. 'done' (the game is over, with a victor, ready for restart)
-    gameState = 'start'
+    gameState = 'difficulty'
 end
 
 --[[
@@ -135,6 +142,11 @@ end
     across system hardware.
 ]]
 function love.update(dt)
+    
+    -- Used to keep track of where the paddle should move to
+    -- Smooths movement
+    lastBallY = ball.y
+    
     if gameState == 'serve' then
         -- before switching to play, initialize ball's velocity based
         -- on player who last scored
@@ -192,7 +204,8 @@ function love.update(dt)
 
         -- if we reach the left edge of the screen, go back to serve
         -- and update the score and serving player
-        if ball.x < 0 then
+        if ball.x < 1 then
+          player1.dy = 0;
             servingPlayer = 1
             player2Score = player2Score + 1
             sounds['score']:play()
@@ -203,8 +216,8 @@ function love.update(dt)
                 winningPlayer = 2
                 gameState = 'done'
             else
-                gameState = 'serve'
                 -- places the ball in the middle of the screen, no velocity
+                gameState = 'serve'
                 ball:reset()
             end
         end
@@ -222,8 +235,8 @@ function love.update(dt)
                 winningPlayer = 1
                 gameState = 'done'
             else
-                gameState = 'serve'
                 -- places the ball in the middle of the screen, no velocity
+                gameState = 'serve'
                 ball:reset()
             end
         end
@@ -233,14 +246,35 @@ function love.update(dt)
     -- paddles can move no matter what state we're in
     --
     -- player 1
-    ballBuffer = 3
-    if ball.dx < 0 then
-      if player1.y + (player1.height/2) > ball.y + ballBuffer then
-          player1.dy = -PADDLE_SPEED
-      elseif player1.y + (player1.height/2) < ball.y - ballBuffer then
-          player1.dy = PADDLE_SPEED
-      else
+    ballBuffer = player1.height/2
+    
+    if ball:collides(player1) then
+      player1.dy = 0
+    end
+    
+    if gameState == 'play' then
+      if ball.dx < -0.1 then
+        if player1.y + (player1.height/2) > lastBallY then
+            player1.dy = -AI_SPEED
+            --if player1.y + (player1.height/2) > lastBallY then
+            --  player1.y = lastBallY + (player1.height/2)
+            --end
+        elseif player1.y + (player1.height/2) < lastBallY then
+            player1.dy = AI_SPEED
+            --if player1.y + (player1.height/2) < lastBallY then
+            --  player1.y = lastBallY + (player1.height/2)
+            --end
+        else
           player1.dy = 0
+        end
+          
+        if player1.y + (player1.height/2) > ball.y + ballBuffer and not ball:collides(player1) then
+            lastBallY = ball.y
+        elseif player1.y + (player1.height/2) < ball.y - ballBuffer and not ball:collides(player1) then
+            lastBallY = ball.y
+        else
+          player1.dy = 0
+        end
       end
     end
 
@@ -276,6 +310,49 @@ function love.keypressed(key)
         love.event.quit()
     -- if we press enter during either the start or serve phase, it should
     -- transition to the next appropriate state
+    -- Restarts the game
+    else if key == 'r' then
+      -- initialize our player paddles; make them global so that they can be
+      -- detected by other functions and modules
+      player1 = Paddle(10, 30, 5, 20)
+      player2 = Paddle(VIRTUAL_WIDTH - 10, VIRTUAL_HEIGHT - 30, 5, 20)
+
+      -- place a ball in the middle of the screen
+      ball = Ball(VIRTUAL_WIDTH / 2 - 2, VIRTUAL_HEIGHT / 2 - 2, 4, 4)
+
+      -- initialize score variables
+      player1Score = 0
+      player2Score = 0
+
+      -- either going to be 1 or 2; whomever is scored on gets to serve the
+      -- following turn
+      servingPlayer = 1
+
+      -- player who won the game; not set to a proper value until we reach
+      -- that state in the game
+      winningPlayer = 0
+
+      -- the state of our game; can be any of the following:
+      -- 0. 'difficulty' (Sets the difficulty)
+      -- 1. 'start' (the beginning of the game, before first serve)
+      -- 2. 'serve' (waiting on a key press to serve the ball)
+      -- 3. 'play' (the ball is in play, bouncing between paddles)
+      -- 4. 'done' (the game is over, with a victor, ready for restart)
+      gameState = 'difficulty'
+    elseif gameState == 'difficulty'then
+      if key == '1' then
+        AI_SPEED = PADDLE_SPEED * AI_EASY
+        gameState = 'start'
+      elseif key == '2' then
+        AI_SPEED = PADDLE_SPEED
+        gameState = 'start'
+      elseif key == '3' then
+        AI_SPEED = PADDLE_SPEED * AI_HARD
+        gameState = 'start'
+      elseif key == '4' then
+        AI_SPEED = PADDLE_SPEED * AI_CRAZY
+        gameState = 'start'
+      end
     elseif key == 'enter' or key == 'return' then
         if gameState == 'start' then
             gameState = 'serve'
@@ -284,7 +361,7 @@ function love.keypressed(key)
         elseif gameState == 'done' then
             -- game is simply in a restart phase here, but will set the serving
             -- player to the opponent of whomever won for fairness!
-            gameState = 'serve'
+            gameState = 'difficulty'
 
             ball:reset()
 
@@ -300,6 +377,7 @@ function love.keypressed(key)
             end
         end
     end
+  end
 end
 
 --[[
@@ -313,6 +391,16 @@ function love.draw()
     love.graphics.clear(40, 45, 52, 255)
     
     -- render different things depending on which part of the game we're in
+    
+    if gameState == 'difficulty' then
+      love.graphics.setFont(largeFont)
+      love.graphics.printf('Select your difficulty! (Press a number to choose)', 0, 20, VIRTUAL_WIDTH, 'center')
+      love.graphics.setFont(smallFont)
+      love.graphics.printf('1, Easy', 0, 60, VIRTUAL_WIDTH, 'center')
+      love.graphics.printf('2, Normal', 0, 90, VIRTUAL_WIDTH, 'center')
+      love.graphics.printf('3, Hard', 0, 120, VIRTUAL_WIDTH, 'center')
+      love.graphics.printf('4, CRAZY', 0, 150, VIRTUAL_WIDTH, 'center')
+    end
     if gameState == 'start' then
         -- UI messages
         love.graphics.setFont(smallFont)
@@ -335,12 +423,14 @@ function love.draw()
         love.graphics.printf('Press Enter to restart!', 0, 30, VIRTUAL_WIDTH, 'center')
     end
 
-    -- show the score before ball is rendered so it can move over the text
-    displayScore()
-    
-    player1:render()
-    player2:render()
-    ball:render()
+    if gameState ~= 'difficulty' then
+      -- show the score before ball is rendered so it can move over the text
+      displayScore()
+      
+      player1:render()
+      player2:render()
+      ball:render()
+    end
 
     -- display FPS for debugging; simply comment out to remove
     displayFPS()
